@@ -1,0 +1,39 @@
+name: FIGS tracker
+
+on:
+  schedule:
+    # every 15 minutes. GitHub cron is best-effort — sometimes runs late.
+    - cron: "*/15 * * * *"
+  workflow_dispatch:  # lets you trigger manually from the Actions tab
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # needed to commit tracker.db back
+    concurrency:
+      group: figs-tracker
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Run one poll cycle
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python tracker.py --once
+
+      - name: Commit updated db
+        run: |
+          git config user.name "figs-bot"
+          git config user.email "figs-bot@users.noreply.github.com"
+          git add tracker.db
+          git diff --staged --quiet || git commit -m "tracker: update db [skip ci]"
+          git push
